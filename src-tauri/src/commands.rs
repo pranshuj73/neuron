@@ -104,12 +104,20 @@ pub async fn embed_notes(
         }
     });
 
+    let model_cache_dir = {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let dir = std::path::PathBuf::from(home).join(".neuron").join("model_cache");
+        std::fs::create_dir_all(&dir).ok();
+        dir
+    };
+
     let embedder_arc = state.local_embedder.clone();
     let vector_size: u64 = spawn_blocking(move || -> Result<u64, String> {
         let mut guard = embedder_arc.lock().unwrap();
         if guard.is_none() {
             let model = fastembed::TextEmbedding::try_new(
-                fastembed::TextInitOptions::new(fastembed::EmbeddingModel::EmbeddingGemma300M),
+                fastembed::TextInitOptions::new(fastembed::EmbeddingModel::EmbeddingGemma300M)
+                    .with_cache_dir(model_cache_dir),
             )
             .map_err(|e| format!("Failed to load EmbeddingGemma: {e}"))?;
             *guard = Some(model);
@@ -124,6 +132,12 @@ pub async fn embed_notes(
     .map_err(|e: String| e)?;
 
     done_flag.store(true, Ordering::Relaxed);
+
+    let vault_id = std::path::Path::new(&settings.vault_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("default")
+        .to_string();
 
     crate::qdrant::ensure_collection(&qdrant_url, vector_size)
         .await
@@ -179,7 +193,7 @@ pub async fn embed_notes(
         match vector_result {
             Ok(vector) => {
                 if let Err(e) = crate::qdrant::upsert_point(
-                    &qdrant_url, &note.id, vector, &note.title, &note.file_path,
+                    &qdrant_url, &note.id, vector, &note.title, &note.file_path, &vault_id,
                 )
                 .await
                 {
@@ -221,10 +235,16 @@ pub async fn embed_notes(
 #[tauri::command]
 pub async fn get_graph(state: State<'_, AppState>) -> Result<GraphPayload, String> {
     let settings = load_settings(&state).await?;
+    let vault_id = std::path::Path::new(&settings.vault_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("default")
+        .to_string();
     crate::graph::build_graph(
         state.db.clone(),
         settings.qdrant_url,
         settings.similarity_threshold as f32,
+        vault_id,
     )
     .await
     .map_err(|e| e.to_string())
@@ -291,10 +311,16 @@ pub async fn save_settings(
 #[tauri::command]
 pub async fn get_insights(state: State<'_, AppState>) -> Result<Insights, String> {
     let settings = load_settings(&state).await?;
+    let vault_id = std::path::Path::new(&settings.vault_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("default")
+        .to_string();
     crate::graph::compute_insights(
         state.db.clone(),
         settings.qdrant_url,
         settings.similarity_threshold as f32,
+        vault_id,
     )
     .await
     .map_err(|e| e.to_string())
@@ -312,6 +338,36 @@ pub async fn read_note_content(file_path: String) -> Result<String, String> {
     tokio::fs::read_to_string(&file_path)
         .await
         .map_err(|e| format!("Failed to read file: {e}"))
+}
+
+// Returns true if links were written, false if an existing block was removed.
+#[tauri::command]
+pub async fn write_note_links(file_path: String, links: Vec<String>) -> Result<bool, String> {
+    use regex::Regex;
+
+    let content = tokio::fs::read_to_string(&file_path)
+        .await
+        .map_err(|e| format!("Failed to read file: {e}"))?;
+
+    // Match an existing neuron-generated block from the separator to EOF
+    let re = Regex::new(r"\n\n---\n\nrelated:\n(?:\+ \[\[.+\]\]\n?)*$")
+        .map_err(|e| e.to_string())?;
+
+    if re.is_match(&content) {
+        let new_content = re.replace(&content, "").to_string();
+        tokio::fs::write(&file_path, new_content)
+            .await
+            .map_err(|e| format!("Failed to write file: {e}"))?;
+        return Ok(false);
+    }
+
+    let entries: String = links.iter().map(|l| format!("+ [[{l}]]\n")).collect();
+    let block = format!("\n\n---\n\nrelated:\n{entries}");
+    let new_content = format!("{}{}", content.trim_end_matches('\n'), block);
+    tokio::fs::write(&file_path, new_content)
+        .await
+        .map_err(|e| format!("Failed to write file: {e}"))?;
+    Ok(true)
 }
 
 #[tauri::command]

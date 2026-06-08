@@ -51,6 +51,7 @@ pub async fn build_graph(
     db: Arc<Mutex<Connection>>,
     qdrant_url: String,
     similarity_threshold: f32,
+    vault_id: String,
 ) -> Result<GraphPayload> {
     // Load all notes
     let notes = tokio::task::spawn_blocking({
@@ -130,6 +131,7 @@ pub async fn build_graph(
             vector,
             11, // +1 to account for self-match
             similarity_threshold,
+            &vault_id,
         )
         .await?;
 
@@ -172,8 +174,9 @@ pub async fn compute_insights(
     db: Arc<Mutex<Connection>>,
     qdrant_url: String,
     similarity_threshold: f32,
+    vault_id: String,
 ) -> Result<Insights> {
-    let graph = build_graph(db, qdrant_url, similarity_threshold).await?;
+    let graph = build_graph(db, qdrant_url, similarity_threshold, vault_id).await?;
 
     // Degree map
     let mut degree: HashMap<String, usize> = graph.nodes.iter().map(|n| (n.id.clone(), 0)).collect();

@@ -98,7 +98,7 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
         ctx.fillText(label, n.x ?? 0, (n.y ?? 0) + radius + 1);
       }
     },
-    [degreeMap, maxDegree, selectedNode]
+    [degreeMap, maxDegree, selectedNode, nodeSize]
   );
 
   const linkCanvasObject = useCallback(

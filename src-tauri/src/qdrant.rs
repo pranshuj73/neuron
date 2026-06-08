@@ -65,6 +65,7 @@ pub async fn upsert_point(
     vector: Vec<f32>,
     title: &str,
     file_path: &str,
+    vault_id: &str,
 ) -> Result<()> {
     let client = Client::new();
     let res = client
@@ -77,6 +78,7 @@ pub async fn upsert_point(
                     "note_id": note_id,
                     "title": title,
                     "file_path": file_path,
+                    "vault_id": vault_id,
                 }
             }]
         }))
@@ -100,12 +102,13 @@ pub async fn delete_point(url: &str, note_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Returns Vec<(note_id, score)> for notes similar to the query vector
+/// Returns Vec<(note_id, score)> for notes similar to the query vector, scoped to vault_id
 pub async fn search_similar(
     url: &str,
     vector: Vec<f32>,
     top_k: usize,
     threshold: f32,
+    vault_id: &str,
 ) -> Result<Vec<(String, f32)>> {
     let client = Client::new();
     let res = client
@@ -115,6 +118,9 @@ pub async fn search_similar(
             "limit": top_k,
             "score_threshold": threshold,
             "with_payload": true,
+            "filter": {
+                "must": [{"key": "vault_id", "match": {"value": vault_id}}]
+            }
         }))
         .send()
         .await?;

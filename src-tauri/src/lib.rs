@@ -60,6 +60,7 @@ pub fn run() {
             commands::get_system_status,
             commands::start_qdrant_docker,
             commands::read_note_content,
+            commands::write_note_links,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

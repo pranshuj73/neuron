@@ -106,7 +106,6 @@ function AppInner() {
   const { data: graphData, loading: graphLoading, reload: reloadGraph } = useGraph();
   const embedProgress = useEmbedProgress();
 
-  const sidebarResize = usePanelResize({ cssVar: "--sidebar-w", defaultPx: 240, minPx: 160, maxPx: 420, side: "left" });
   const rightResize = usePanelResize({ cssVar: "--right-w", defaultPx: 280, minPx: 180, maxPx: 480, side: "right" });
 
   const [selectedNode, setSelectedNode] = useState<NoteNode | null>(null);
@@ -117,6 +116,7 @@ function AppInner() {
   const [searchResults, setSearchResults] = useState<NoteNode[]>([]);
   const [localThreshold, setLocalThreshold] = useState(0.75);
   const [nodeSize, setNodeSize] = useState(1.0);
+  const [rightExpanded, setRightExpanded] = useState(false);
 
   // Sync threshold from settings once loaded
   useEffect(() => {
@@ -192,7 +192,7 @@ function AppInner() {
   }
 
   return (
-    <div className="app-root">
+    <div className={`app-root${rightExpanded ? " right-expanded" : ""}`}>
       <Sidebar
         vaultPath={settings.vaultPath}
         noteCount={noteCount}
@@ -209,8 +209,6 @@ function AppInner() {
         onSearch={handleSearch}
         onSearchNodeSelect={handleSearchNodeSelect}
       />
-
-      <div className="resize-handle resize-handle--left" onMouseDown={sidebarResize.onMouseDown} />
 
       <div className="graph-area">
         <GraphControls
@@ -243,12 +241,15 @@ function AppInner() {
         )}
       </div>
 
-      <div className="resize-handle resize-handle--right" onMouseDown={rightResize.onMouseDown} />
+      <div className="resize-handle" onMouseDown={rightResize.onMouseDown} />
 
       <RightPanel
         selectedNode={selectedNode}
         insights={insights}
+        graphData={graphData}
         onNodeSelect={setSelectedNode}
+        isExpanded={rightExpanded}
+        onToggleExpand={() => setRightExpanded((v) => !v)}
       />
 
       {showSettings && (
