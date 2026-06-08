@@ -110,16 +110,18 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
     }
   }, []);
 
-  // ForceGraph2D inserts <canvas> in its own effect, so we defer one tick
-  // to ensure the canvas exists before we try to attach listeners.
+  // mousemove bubbles from canvas → container div, so we listen on the
+  // stable container ref — no canvas querySelector needed, no orphaned listeners.
   useEffect(() => {
-    let canvas: HTMLCanvasElement | null = null;
+    const container = containerRef.current;
+    if (!container) return;
 
     function onMove(e: MouseEvent) {
-      if (!fgRef.current || !canvas) return;
+      if (!fgRef.current) return;
       if (labelTimer.current) clearTimeout(labelTimer.current);
       labelTimer.current = setTimeout(() => {
-        const rect = canvas!.getBoundingClientRect();
+        if (!fgRef.current) return;
+        const rect = container.getBoundingClientRect();
         const sx = e.clientX - rect.left;
         const sy = e.clientY - rect.top;
         const { x: gx, y: gy } = fgRef.current.screen2GraphCoords(sx, sy);
@@ -145,19 +147,11 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
       onAreaLabel([]);
     }
 
-    const attach = setTimeout(() => {
-      canvas = containerRef.current?.querySelector("canvas") ?? null;
-      if (!canvas) return;
-      canvas.addEventListener("mousemove", onMove);
-      canvas.addEventListener("mouseleave", onLeave);
-    }, 0);
-
+    container.addEventListener("mousemove", onMove);
+    container.addEventListener("mouseleave", onLeave);
     return () => {
-      clearTimeout(attach);
-      if (canvas) {
-        canvas.removeEventListener("mousemove", onMove);
-        canvas.removeEventListener("mouseleave", onLeave);
-      }
+      container.removeEventListener("mousemove", onMove);
+      container.removeEventListener("mouseleave", onLeave);
     };
   }, [fgData.nodes, onAreaLabel]);
 
@@ -185,9 +179,9 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
       const isSelected = selectedNode?.id === n.id;
       const isEmbedded = n.embeddedAt !== null;
 
-      // Keep nodes a fixed screen size across zoom levels.
-      // Hub nodes get up to NODE_MAX_PX; leaf nodes get NODE_MIN_PX.
-      const screenPx = NODE_MIN_PX + degreeRatio * (NODE_MAX_PX - NODE_MIN_PX);
+      // Base size in screen-pixels; add a small bonus when zoomed in (capped at +4px).
+      const basePx = NODE_MIN_PX + degreeRatio * (NODE_MAX_PX - NODE_MIN_PX);
+      const screenPx = basePx + Math.min(Math.max(0, globalScale - 1) * 1.5, 4);
       const radius = screenPx / globalScale;
 
       ctx.beginPath();

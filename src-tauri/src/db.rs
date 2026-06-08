@@ -98,13 +98,14 @@ pub fn init(app_data_dir: &Path) -> Result<Connection> {
 
 pub fn upsert_note(conn: &Connection, note: &NoteRecord) -> Result<()> {
     conn.execute(
-        "INSERT INTO notes (id, file_path, title, body, tags, headings, embedded_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO notes (id, file_path, title, body, tags, headings, keywords, embedded_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(file_path) DO UPDATE SET
              title = excluded.title,
              body = excluded.body,
              tags = excluded.tags,
              headings = excluded.headings,
+             keywords = excluded.keywords,
              embedded_at = CASE WHEN notes.updated_at != excluded.updated_at THEN NULL ELSE notes.embedded_at END,
              updated_at = excluded.updated_at",
         params![
@@ -114,6 +115,7 @@ pub fn upsert_note(conn: &Connection, note: &NoteRecord) -> Result<()> {
             note.body,
             note.tags,
             note.headings,
+            note.keywords,
             note.embedded_at,
             note.created_at,
             note.updated_at,
