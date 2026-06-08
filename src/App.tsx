@@ -1,51 +1,263 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useCallback, useEffect, useState } from "react";
+import { GraphCanvas } from "./components/graph/GraphCanvas";
+import { GraphControls } from "./components/graph/GraphControls";
+import { Sidebar } from "./components/layout/Sidebar";
+import { RightPanel } from "./components/layout/RightPanel";
+import { SettingsModal } from "./components/settings/SettingsModal";
+import { useEmbedProgress } from "./hooks/useEmbedProgress";
+import { useGraph } from "./hooks/useGraph";
+import { usePanelResize } from "./hooks/usePanelResize";
+import { useSettings } from "./hooks/useSettings";
+import type {
+  AppSettings,
+  EmbedResult,
+  Insights,
+  NoteNode,
+  ScanResult,
+  SystemStatus,
+} from "./types/graph";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+export default function App() {
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  useEffect(() => {
+    invoke<SystemStatus>("get_system_status").then(setSystemStatus).catch(() =>
+      setSystemStatus({ dockerAvailable: false, qdrantOk: false })
+    );
+  }, []);
+
+  // Poll until Qdrant is ready after Docker starts the container
+  useEffect(() => {
+    if (!systemStatus?.dockerAvailable || systemStatus.qdrantOk) return;
+    const id = setInterval(() => {
+      invoke<SystemStatus>("get_system_status").then((s) => {
+        setSystemStatus(s);
+        if (s.qdrantOk) clearInterval(id);
+      });
+    }, 2000);
+    return () => clearInterval(id);
+  }, [systemStatus?.dockerAvailable, systemStatus?.qdrantOk]);
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      const status = await invoke<SystemStatus>("start_qdrant_docker");
+      setSystemStatus(status);
+    } catch {
+      const status = await invoke<SystemStatus>("get_system_status").catch(() => ({
+        dockerAvailable: false,
+        qdrantOk: false,
+      }));
+      setSystemStatus(status);
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  if (!systemStatus) {
+    return <div className="setup-screen"><p className="setup-checking">Starting up…</p></div>;
+  }
+
+  if (!systemStatus.dockerAvailable) {
+    return (
+      <div className="setup-screen">
+        <div className="setup-card">
+          <div className="setup-icon">🐳</div>
+          <h1 className="setup-title">Docker required</h1>
+          <p className="setup-body">
+            Neuron uses Docker to run Qdrant, its vector database.
+            Install Docker Desktop, make sure it's running, then click Retry.
+          </p>
+          <p className="setup-hint">
+            Download from <strong>docker.com/products/docker-desktop</strong>
+          </p>
+          <button className="btn-primary setup-btn" onClick={handleRetry} disabled={retrying}>
+            {retrying ? "Checking…" : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!systemStatus.qdrantOk) {
+    return (
+      <div className="setup-screen">
+        <div className="setup-card">
+          <div className="setup-icon">⏳</div>
+          <h1 className="setup-title">Starting Qdrant…</h1>
+          <p className="setup-body">
+            Pulling and starting the Qdrant container. This may take a moment on first run.
+          </p>
+          <button className="btn-primary setup-btn" onClick={handleRetry} disabled={retrying}>
+            {retrying ? "Starting…" : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <AppInner />;
+}
+
+function AppInner() {
+  const { settings, save: saveSettings, loading: settingsLoading } = useSettings();
+  const { data: graphData, loading: graphLoading, reload: reloadGraph } = useGraph();
+  const embedProgress = useEmbedProgress();
+
+  const sidebarResize = usePanelResize({ cssVar: "--sidebar-w", defaultPx: 240, minPx: 160, maxPx: 420, side: "left" });
+  const rightResize = usePanelResize({ cssVar: "--right-w", defaultPx: 280, minPx: 180, maxPx: 480, side: "right" });
+
+  const [selectedNode, setSelectedNode] = useState<NoteNode | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isEmbedding, setIsEmbedding] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [insights, setInsights] = useState<Insights | null>(null);
+  const [searchResults, setSearchResults] = useState<NoteNode[]>([]);
+  const [localThreshold, setLocalThreshold] = useState(0.75);
+  const [nodeSize, setNodeSize] = useState(1.0);
+
+  // Sync threshold from settings once loaded
+  useEffect(() => {
+    if (!settingsLoading) {
+      setLocalThreshold(settings.similarityThreshold);
+    }
+  }, [settingsLoading, settings.similarityThreshold]);
+
+  // Auto-load graph if vault was previously set
+  useEffect(() => {
+    if (!settingsLoading && settings.vaultPath) {
+      reloadGraph();
+    }
+  }, [settingsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load insights whenever graph changes
+  useEffect(() => {
+    if (graphData && graphData.nodes.length > 0) {
+      invoke<Insights>("get_insights")
+        .then(setInsights)
+        .catch(console.error);
+    }
+  }, [graphData]);
+
+  // Track embedding state via progress events
+  useEffect(() => {
+    if (embedProgress) {
+      setIsEmbedding(embedProgress.done < embedProgress.total);
+    }
+  }, [embedProgress]);
+
+  const handleVaultPicked = useCallback((path: string) => {
+    saveSettings({ ...settings, vaultPath: path });
+  }, [settings, saveSettings]);
+
+  const handleScanComplete = useCallback((_result: ScanResult) => {
+    setIsScanning(false);
+    reloadGraph();
+  }, [reloadGraph]);
+
+  const handleEmbedComplete = useCallback((_result: EmbedResult) => {
+    setIsEmbedding(false);
+    reloadGraph();
+  }, [reloadGraph]);
+
+  const embeddedCount = graphData?.nodes.filter((n) => n.embeddedAt !== null).length ?? 0;
+  const noteCount = graphData?.nodes.length ?? 0;
+  const visibleEdgeCount = graphData?.edges.filter(
+    (e) => e.edgeType !== "semantic" || (e.similarity ?? 0) >= localThreshold
+  ).length ?? 0;
+
+  async function handleSearch(query: string) {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const results = await invoke<NoteNode[]>("search_notes", { query });
+      setSearchResults(results);
+    } catch {
+      setSearchResults([]);
+    }
+  }
+
+  function handleSearchNodeSelect(node: NoteNode) {
+    setSelectedNode(node);
+    setSearchResults([]);
+  }
+
+  async function handleSaveSettings(updated: AppSettings) {
+    await saveSettings(updated);
+    setLocalThreshold(updated.similarityThreshold);
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="app-root">
+      <Sidebar
+        vaultPath={settings.vaultPath}
+        noteCount={noteCount}
+        embeddedCount={embeddedCount}
+        isScanning={isScanning}
+        isEmbedding={isEmbedding}
+        embedProgress={embedProgress}
+        onVaultPicked={handleVaultPicked}
+        onScanComplete={handleScanComplete}
+        onEmbedComplete={handleEmbedComplete}
+        onGraphRefresh={reloadGraph}
+        onShowSettings={() => setShowSettings(true)}
+        searchResults={searchResults}
+        onSearch={handleSearch}
+        onSearchNodeSelect={handleSearchNodeSelect}
+      />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      <div className="resize-handle resize-handle--left" onMouseDown={sidebarResize.onMouseDown} />
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+      <div className="graph-area">
+        <GraphControls
+          similarityThreshold={localThreshold}
+          onThresholdChange={setLocalThreshold}
+          nodeSize={nodeSize}
+          onNodeSizeChange={setNodeSize}
+          nodeCount={noteCount}
+          edgeCount={visibleEdgeCount}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+
+        {graphLoading && (
+          <div className="graph-loading">Loading graph…</div>
+        )}
+
+        {!graphLoading && (!graphData || graphData.nodes.length === 0) && (
+          <div className="graph-empty">
+            <p>Open a vault folder and scan your notes to get started.</p>
+          </div>
+        )}
+
+        {graphData && graphData.nodes.length > 0 && (
+          <GraphCanvas
+            graphData={graphData}
+            selectedNode={selectedNode}
+            onNodeClick={setSelectedNode}
+            similarityThreshold={localThreshold}
+            nodeSize={nodeSize}
+          />
+        )}
+      </div>
+
+      <div className="resize-handle resize-handle--right" onMouseDown={rightResize.onMouseDown} />
+
+      <RightPanel
+        selectedNode={selectedNode}
+        insights={insights}
+        onNodeSelect={setSelectedNode}
+      />
+
+      {showSettings && (
+        <SettingsModal
+          settings={settings}
+          onSave={handleSaveSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+    </div>
   );
 }
-
-export default App;
