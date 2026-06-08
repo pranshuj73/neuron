@@ -16,6 +16,7 @@ interface Props {
   onNodeClick: (node: NoteNode) => void;
   similarityThreshold: number;
   spread: number;
+  nodeSize: number;
   onAreaLabel: (words: string[]) => void;
 }
 
@@ -42,7 +43,7 @@ function topKeywords(nodes: NoteNode[], n: number): string[] {
     .map(([w]) => w);
 }
 
-export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityThreshold, spread, onAreaLabel }: Props) {
+export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityThreshold, spread, nodeSize, onAreaLabel }: Props) {
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const labelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,29 +87,39 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
   const stopCount = useRef(0);
   useEffect(() => { stopCount.current = 0; }, [fgData]);
 
-  // When spread changes while the graph is already laid out, just apply + reheat once
+  const nodesRef = useRef(fgData.nodes);
+  useEffect(() => { nodesRef.current = fgData.nodes; }, [fgData.nodes]);
+
+  const applyForces = useCallback((fg: any, s: number) => {
+    fg.d3Force("link")?.distance(s);
+    fg.d3Force("charge")?.strength(-s * 0.8);
+    nodesRef.current.forEach((n: any) => {
+      n.x = (Math.random() - 0.5) * s * 2;
+      n.y = (Math.random() - 0.5) * s * 2;
+      n.vx = 0;
+      n.vy = 0;
+    });
+  }, []);
+
   const spreadRef = useRef(spread);
   useEffect(() => {
     spreadRef.current = spread;
     if (!fgRef.current) return;
-    fgRef.current.d3Force("link")?.distance(spread);
-    fgRef.current.d3Force("charge")?.strength(-spread * 0.8);
+    applyForces(fgRef.current, spread);
     fgRef.current.d3ReheatSimulation();
-    stopCount.current = 1; // next stop → zoomToFit
-  }, [spread]); // eslint-disable-line
+    stopCount.current = 1;
+  }, [spread, applyForces]);
 
   const handleEngineStop = useCallback(() => {
     if (!fgRef.current) return;
     stopCount.current += 1;
     if (stopCount.current === 1) {
-      // First stop used default d3 forces. Now apply spread and reheat.
-      fgRef.current.d3Force("link")?.distance(spreadRef.current);
-      fgRef.current.d3Force("charge")?.strength(-spreadRef.current * 0.8);
+      applyForces(fgRef.current, spreadRef.current);
       fgRef.current.d3ReheatSimulation();
     } else {
       fgRef.current.zoomToFit(400, 40);
     }
-  }, []);
+  }, [applyForces]);
 
   // mousemove bubbles from canvas → container div, so we listen on the
   // stable container ref — no canvas querySelector needed, no orphaned listeners.
@@ -179,8 +190,8 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
       const isSelected = selectedNode?.id === n.id;
       const isEmbedded = n.embeddedAt !== null;
 
-      // Base size in screen-pixels; add a small bonus when zoomed in (capped at +4px).
-      const basePx = NODE_MIN_PX + degreeRatio * (NODE_MAX_PX - NODE_MIN_PX);
+      // Base size scaled by nodeSize multiplier; zoom bonus capped at +4px.
+      const basePx = (NODE_MIN_PX + degreeRatio * (NODE_MAX_PX - NODE_MIN_PX)) * nodeSize;
       const screenPx = basePx + Math.min(Math.max(0, globalScale - 1) * 1.5, 4);
       const radius = screenPx / globalScale;
 
@@ -215,7 +226,7 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
         ctx.fillText(label, n.x ?? 0, (n.y ?? 0) + radius + 2 / globalScale);
       }
     },
-    [degreeMap, maxDegree, selectedNode]
+    [degreeMap, maxDegree, selectedNode, nodeSize]
   );
 
   const linkCanvasObject = useCallback(

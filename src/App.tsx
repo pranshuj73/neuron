@@ -121,7 +121,8 @@ function AppInner() {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [searchResults, setSearchResults] = useState<NoteNode[]>([]);
   const [localThreshold, setLocalThreshold] = useState(0.60);
-  const [spread, setSpread] = useState(40);
+  const [spread, setSpread] = useState(100);
+  const [nodeSize, setNodeSize] = useState(1.0);
   const [areaLabel, setAreaLabel] = useState<string[]>([]);
   const [rightExpanded, setRightExpanded] = useState(false);
 
@@ -223,6 +224,8 @@ function AppInner() {
           onThresholdChange={setLocalThreshold}
           spread={spread}
           onSpreadChange={setSpread}
+          nodeSize={nodeSize}
+          onNodeSizeChange={setNodeSize}
           nodeCount={noteCount}
           edgeCount={visibleEdgeCount}
         />
@@ -243,6 +246,7 @@ function AppInner() {
               onNodeClick={setSelectedNode}
               similarityThreshold={localThreshold}
               spread={spread}
+              nodeSize={nodeSize}
               onAreaLabel={setAreaLabel}
             />
           )}

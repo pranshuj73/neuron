@@ -3,6 +3,8 @@ interface Props {
   onThresholdChange: (value: number) => void;
   spread: number;
   onSpreadChange: (value: number) => void;
+  nodeSize: number;
+  onNodeSizeChange: (value: number) => void;
   nodeCount: number;
   edgeCount: number;
 }
@@ -12,6 +14,8 @@ export function GraphControls({
   onThresholdChange,
   spread,
   onSpreadChange,
+  nodeSize,
+  onNodeSizeChange,
   nodeCount,
   edgeCount,
 }: Props) {
@@ -43,6 +47,17 @@ export function GraphControls({
             step={10}
             value={spread}
             onChange={(e) => onSpreadChange(parseInt(e.target.value))}
+          />
+        </div>
+        <div className="graph-controls-threshold">
+          <label>Size: {nodeSize.toFixed(1)}×</label>
+          <input
+            type="range"
+            min={0.3}
+            max={2.5}
+            step={0.1}
+            value={nodeSize}
+            onChange={(e) => onNodeSizeChange(parseFloat(e.target.value))}
           />
         </div>
       </div>
