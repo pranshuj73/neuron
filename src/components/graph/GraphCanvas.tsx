@@ -7,8 +7,8 @@ const LABEL_COOLDOWN_MS = 120;
 
 // Node size is always in screen-pixels (divided by globalScale to get world units).
 // This keeps nodes a constant visible size regardless of zoom.
-const NODE_MIN_PX = 2;
-const NODE_MAX_PX = 7;
+const NODE_MIN_PX = 3;
+const NODE_MAX_PX = 10;
 
 interface Props {
   graphData: GraphPayload;
@@ -17,6 +17,7 @@ interface Props {
   similarityThreshold: number;
   spread: number;
   nodeSize: number;
+  showSemantic: boolean;
   onAreaLabel: (words: string[]) => void;
 }
 
@@ -43,7 +44,7 @@ function topKeywords(nodes: NoteNode[], n: number): string[] {
     .map(([w]) => w);
 }
 
-export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityThreshold, spread, nodeSize, onAreaLabel }: Props) {
+export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityThreshold, spread, nodeSize, showSemantic, onAreaLabel }: Props) {
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const labelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,10 +77,10 @@ export function GraphCanvas({ graphData, selectedNode, onNodeClick, similarityTh
     () => ({
       nodes: graphData.nodes.map((n) => ({ ...n })) as FGNode[],
       links: graphData.edges
-        .filter((e) => e.edgeType !== "semantic" || (e.similarity ?? 0) >= similarityThreshold)
+        .filter((e) => e.edgeType !== "semantic" || (showSemantic && (e.similarity ?? 0) >= similarityThreshold))
         .map((e) => ({ ...e })) as FGLink[],
     }),
-    [graphData, similarityThreshold]
+    [graphData, similarityThreshold, showSemantic]
   );
 
   // Track simulation stop count per graph load so we can do two passes:

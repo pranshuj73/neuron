@@ -13,6 +13,8 @@ interface Props {
   onEmbedComplete: (result: EmbedResult) => void;
   onGraphRefresh: () => void;
   onShowSettings: () => void;
+  showSemantic: boolean;
+  onToggleSemantic: () => void;
   searchResults: NoteNode[];
   onSearch: (query: string) => void;
   onSearchNodeSelect: (node: NoteNode) => void;
@@ -30,6 +32,8 @@ export function Sidebar({
   onEmbedComplete,
   onGraphRefresh,
   onShowSettings,
+  showSemantic,
+  onToggleSemantic,
   searchResults,
   onSearch,
   onSearchNodeSelect,
@@ -63,9 +67,18 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="app-name">neuron</span>
-        <button className="btn-ghost icon-btn" onClick={onShowSettings} title="Settings">
-          ⚙
-        </button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            className={`btn-ghost icon-btn${showSemantic ? "" : " btn-active"}`}
+            onClick={onToggleSemantic}
+            title={showSemantic ? "Hide semantic links" : "Show semantic links"}
+          >
+            ⋯
+          </button>
+          <button className="btn-ghost icon-btn" onClick={onShowSettings} title="Settings">
+            ⚙
+          </button>
+        </div>
       </div>
 
       <div className="sidebar-section">

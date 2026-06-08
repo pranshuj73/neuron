@@ -125,6 +125,7 @@ function AppInner() {
   const [nodeSize, setNodeSize] = useState(1.0);
   const [areaLabel, setAreaLabel] = useState<string[]>([]);
   const [rightExpanded, setRightExpanded] = useState(false);
+  const [showSemantic, setShowSemantic] = useState(true);
 
   // Sync threshold from settings once loaded
   useEffect(() => {
@@ -213,6 +214,8 @@ function AppInner() {
         onEmbedComplete={handleEmbedComplete}
         onGraphRefresh={reloadGraph}
         onShowSettings={() => setShowSettings(true)}
+        showSemantic={showSemantic}
+        onToggleSemantic={() => setShowSemantic((v) => !v)}
         searchResults={searchResults}
         onSearch={handleSearch}
         onSearchNodeSelect={handleSearchNodeSelect}
@@ -247,6 +250,7 @@ function AppInner() {
               similarityThreshold={localThreshold}
               spread={spread}
               nodeSize={nodeSize}
+              showSemantic={showSemantic}
               onAreaLabel={setAreaLabel}
             />
           )}
