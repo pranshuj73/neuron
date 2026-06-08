@@ -1,8 +1,8 @@
 interface Props {
   similarityThreshold: number;
   onThresholdChange: (value: number) => void;
-  nodeSize: number;
-  onNodeSizeChange: (value: number) => void;
+  spread: number;
+  onSpreadChange: (value: number) => void;
   nodeCount: number;
   edgeCount: number;
 }
@@ -10,8 +10,8 @@ interface Props {
 export function GraphControls({
   similarityThreshold,
   onThresholdChange,
-  nodeSize,
-  onNodeSizeChange,
+  spread,
+  onSpreadChange,
   nodeCount,
   edgeCount,
 }: Props) {
@@ -35,14 +35,14 @@ export function GraphControls({
       </div>
       <div className="graph-controls-right">
         <div className="graph-controls-threshold">
-          <label>Size: {nodeSize.toFixed(1)}×</label>
+          <label>Spread: {spread}</label>
           <input
             type="range"
-            min={0.3}
-            max={2.5}
-            step={0.1}
-            value={nodeSize}
-            onChange={(e) => onNodeSizeChange(parseFloat(e.target.value))}
+            min={20}
+            max={300}
+            step={10}
+            value={spread}
+            onChange={(e) => onSpreadChange(parseInt(e.target.value))}
           />
         </div>
       </div>

@@ -106,7 +106,13 @@ function AppInner() {
   const { data: graphData, loading: graphLoading, reload: reloadGraph } = useGraph();
   const embedProgress = useEmbedProgress();
 
-  const rightResize = usePanelResize({ cssVar: "--right-w", defaultPx: 280, minPx: 180, maxPx: 480, side: "right" });
+  const rightResize = usePanelResize({
+    cssVar: "--right-w",
+    defaultPx: Math.round(window.innerWidth * 0.35),
+    minPx: 200,
+    maxPx: Math.round(window.innerWidth * 0.35),
+    side: "right",
+  });
 
   const [selectedNode, setSelectedNode] = useState<NoteNode | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -114,8 +120,9 @@ function AppInner() {
   const [showSettings, setShowSettings] = useState(false);
   const [insights, setInsights] = useState<Insights | null>(null);
   const [searchResults, setSearchResults] = useState<NoteNode[]>([]);
-  const [localThreshold, setLocalThreshold] = useState(0.75);
-  const [nodeSize, setNodeSize] = useState(1.0);
+  const [localThreshold, setLocalThreshold] = useState(0.60);
+  const [spread, setSpread] = useState(40);
+  const [areaLabel, setAreaLabel] = useState<string[]>([]);
   const [rightExpanded, setRightExpanded] = useState(false);
 
   // Sync threshold from settings once loaded
@@ -214,31 +221,36 @@ function AppInner() {
         <GraphControls
           similarityThreshold={localThreshold}
           onThresholdChange={setLocalThreshold}
-          nodeSize={nodeSize}
-          onNodeSizeChange={setNodeSize}
+          spread={spread}
+          onSpreadChange={setSpread}
           nodeCount={noteCount}
           edgeCount={visibleEdgeCount}
         />
 
-        {graphLoading && (
-          <div className="graph-loading">Loading graph…</div>
-        )}
+        <div className="graph-canvas-area">
+          {graphLoading && <div className="graph-empty"><p>Loading graph…</p></div>}
 
-        {!graphLoading && (!graphData || graphData.nodes.length === 0) && (
-          <div className="graph-empty">
-            <p>Open a vault folder and scan your notes to get started.</p>
-          </div>
-        )}
+          {!graphLoading && (!graphData || graphData.nodes.length === 0) && (
+            <div className="graph-empty">
+              <p>Open a vault folder and scan your notes to get started.</p>
+            </div>
+          )}
 
-        {graphData && graphData.nodes.length > 0 && (
-          <GraphCanvas
-            graphData={graphData}
-            selectedNode={selectedNode}
-            onNodeClick={setSelectedNode}
-            similarityThreshold={localThreshold}
-            nodeSize={nodeSize}
-          />
-        )}
+          {!graphLoading && graphData && graphData.nodes.length > 0 && (
+            <GraphCanvas
+              graphData={graphData}
+              selectedNode={selectedNode}
+              onNodeClick={setSelectedNode}
+              similarityThreshold={localThreshold}
+              spread={spread}
+              onAreaLabel={setAreaLabel}
+            />
+          )}
+        </div>
+
+        <div className="graph-statusbar">
+          {areaLabel.length > 0 && <span>✦ {areaLabel.join(", ")}</span>}
+        </div>
       </div>
 
       <div className="resize-handle" onMouseDown={rightResize.onMouseDown} />

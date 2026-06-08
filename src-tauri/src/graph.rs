@@ -13,6 +13,7 @@ pub struct NoteNode {
     pub file_path: String,
     pub tags: Vec<String>,
     pub embedded_at: Option<i64>,
+    pub keywords: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -82,6 +83,7 @@ pub async fn build_graph(
             file_path: n.file_path.clone(),
             tags: serde_json::from_str(&n.tags).unwrap_or_default(),
             embedded_at: n.embedded_at,
+            keywords: serde_json::from_str(&n.keywords).unwrap_or_default(),
         })
         .collect();
 

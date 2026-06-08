@@ -8,7 +8,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   hfModel: "sentence-transformers/all-MiniLM-L6-v2",
   ollamaUrl: "http://localhost:11434",
   ollamaModel: "nomic-embed-text",
-  similarityThreshold: 0.75,
+  similarityThreshold: 0.60,
   vaultPath: "",
   qdrantUrl: "http://localhost:6333",
 };

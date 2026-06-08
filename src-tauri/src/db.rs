@@ -10,6 +10,7 @@ pub struct NoteRecord {
     pub body: String,
     pub tags: String,
     pub headings: String,
+    pub keywords: String,
     pub embedded_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -46,6 +47,7 @@ pub fn init(app_data_dir: &Path) -> Result<Connection> {
             body        TEXT NOT NULL,
             tags        TEXT NOT NULL DEFAULT '[]',
             headings    TEXT NOT NULL DEFAULT '[]',
+            keywords    TEXT NOT NULL DEFAULT '[]',
             embedded_at INTEGER,
             created_at  INTEGER NOT NULL,
             updated_at  INTEGER NOT NULL
@@ -67,6 +69,11 @@ pub fn init(app_data_dir: &Path) -> Result<Connection> {
         ",
     )?;
 
+    // Migrations for existing databases
+    conn.execute_batch(
+        "ALTER TABLE notes ADD COLUMN keywords TEXT NOT NULL DEFAULT '[]';"
+    ).ok(); // ignore error if column already exists
+
     // Insert defaults (ignore if already exist)
     let defaults = [
         ("embedding_provider", "local"),
@@ -74,7 +81,7 @@ pub fn init(app_data_dir: &Path) -> Result<Connection> {
         ("hf_model", "sentence-transformers/all-MiniLM-L6-v2"),
         ("ollama_url", "http://localhost:11434"),
         ("ollama_model", "nomic-embed-text"),
-        ("similarity_threshold", "0.75"),
+        ("similarity_threshold", "0.60"),
         ("vault_path", ""),
         ("qdrant_url", "http://localhost:6333"),
         ("vector_size", "768"),
@@ -117,7 +124,7 @@ pub fn upsert_note(conn: &Connection, note: &NoteRecord) -> Result<()> {
 
 pub fn get_all_notes(conn: &Connection) -> Result<Vec<NoteRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, body, tags, headings, embedded_at, created_at, updated_at FROM notes",
+        "SELECT id, file_path, title, body, tags, headings, keywords, embedded_at, created_at, updated_at FROM notes",
     )?;
     let notes = stmt
         .query_map([], |row| {
@@ -128,9 +135,10 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<NoteRecord>> {
                 body: row.get(3)?,
                 tags: row.get(4)?,
                 headings: row.get(5)?,
-                embedded_at: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                keywords: row.get(6)?,
+                embedded_at: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -139,7 +147,7 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<NoteRecord>> {
 
 pub fn get_unembedded_notes(conn: &Connection) -> Result<Vec<NoteRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, body, tags, headings, embedded_at, created_at, updated_at
+        "SELECT id, file_path, title, body, tags, headings, keywords, embedded_at, created_at, updated_at
          FROM notes WHERE embedded_at IS NULL",
     )?;
     let notes = stmt
@@ -151,13 +159,22 @@ pub fn get_unembedded_notes(conn: &Connection) -> Result<Vec<NoteRecord>> {
                 body: row.get(3)?,
                 tags: row.get(4)?,
                 headings: row.get(5)?,
-                embedded_at: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                keywords: row.get(6)?,
+                embedded_at: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(notes)
+}
+
+pub fn set_note_keywords(conn: &Connection, id: &str, keywords: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE notes SET keywords = ?1 WHERE id = ?2",
+        params![keywords, id],
+    )?;
+    Ok(())
 }
 
 pub fn mark_note_embedded(conn: &Connection, id: &str, timestamp: i64) -> Result<()> {
@@ -237,7 +254,7 @@ pub fn clear_embedded_at(conn: &Connection) -> Result<()> {
 pub fn search_notes_fts(conn: &Connection, query: &str) -> Result<Vec<NoteRecord>> {
     let pattern = format!("%{}%", query.to_lowercase());
     let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, body, tags, headings, embedded_at, created_at, updated_at
+        "SELECT id, file_path, title, body, tags, headings, keywords, embedded_at, created_at, updated_at
          FROM notes
          WHERE lower(title) LIKE ?1 OR lower(body) LIKE ?1
          LIMIT 50",
@@ -251,9 +268,10 @@ pub fn search_notes_fts(conn: &Connection, query: &str) -> Result<Vec<NoteRecord
                 body: row.get(3)?,
                 tags: row.get(4)?,
                 headings: row.get(5)?,
-                embedded_at: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                keywords: row.get(6)?,
+                embedded_at: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;

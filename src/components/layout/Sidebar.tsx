@@ -46,7 +46,8 @@ export function Sidebar({
   }
 
   async function embedNotes() {
-    const result = await invoke<EmbedResult>("embed_notes");
+    const force = noteCount > 0 && embeddedCount === noteCount;
+    const result = await invoke<EmbedResult>("embed_notes", { force });
     onEmbedComplete(result);
   }
 
@@ -98,9 +99,9 @@ export function Sidebar({
             <button
               className="btn-secondary"
               onClick={embedNotes}
-              disabled={isEmbedding || isScanning || embeddedCount === noteCount}
+              disabled={isEmbedding || isScanning}
             >
-              {isEmbedding ? "Embedding…" : "Embed"}
+              {isEmbedding ? "Embedding…" : noteCount > 0 && embeddedCount === noteCount ? "Re-embed" : "Embed"}
             </button>
           </div>
 

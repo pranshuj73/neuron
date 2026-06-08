@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod embedder;
 mod graph;
+mod keywords;
 mod parser;
 mod qdrant;
 mod scanner;

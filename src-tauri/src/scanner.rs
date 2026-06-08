@@ -76,6 +76,9 @@ pub async fn scan_vault(vault_path: String, db: Arc<Mutex<Connection>>) -> Resul
         let now = db::now_unix();
         let note_id = existing_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        let keywords = crate::keywords::extract_keywords(&parsed.title, &parsed.body, 20);
+        let keywords_json = serde_json::to_string(&keywords).unwrap_or_else(|_| "[]".to_string());
+
         let record = NoteRecord {
             id: note_id.clone(),
             file_path: file_path.clone(),
@@ -84,6 +87,7 @@ pub async fn scan_vault(vault_path: String, db: Arc<Mutex<Connection>>) -> Resul
             tags: serde_json::to_string(&parsed.tags).unwrap_or_else(|_| "[]".to_string()),
             headings: serde_json::to_string(&parsed.headings)
                 .unwrap_or_else(|_| "[]".to_string()),
+            keywords: keywords_json,
             embedded_at: None,
             created_at: now,
             updated_at: *mtime,

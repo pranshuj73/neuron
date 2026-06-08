@@ -36,6 +36,11 @@ export function usePanelResize({ cssVar, defaultPx, minPx, maxPx, side }: Option
     document.documentElement.style.setProperty(cssVar, `${clamped}px`);
   }, [cssVar, minPx, maxPx]);
 
+  // Set initial width on mount
+  useEffect(() => {
+    setWidth(defaultPx);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     dragging.current = true;

@@ -4,6 +4,7 @@ export interface NoteNode {
   filePath: string;
   tags: string[];
   embeddedAt: number | null;
+  keywords: string[];
 }
 
 export type EdgeType = "explicit_wiki" | "explicit_markdown" | "semantic";

@@ -76,12 +76,23 @@ pub async fn scan_vault(
 pub async fn embed_notes(
     app: AppHandle,
     state: State<'_, AppState>,
+    force: bool,
 ) -> Result<EmbedResult, String> {
     let settings = load_settings(&state).await?;
     let qdrant_url = settings.qdrant_url.clone();
 
     // Always use fastembed — emit progress while model loads/downloads
-    let needs_download = state.local_embedder.lock().unwrap().is_none();
+    let not_in_memory = state.local_embedder.lock().unwrap().is_none();
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let model_cache_dir = std::path::PathBuf::from(&home).join(".neuron").join("model_cache");
+    std::fs::create_dir_all(&model_cache_dir).ok();
+
+    // If any model subdirectory exists, the files are cached on disk
+    let cached_on_disk = std::fs::read_dir(&model_cache_dir)
+        .map(|mut d| d.next().is_some())
+        .unwrap_or(false);
+    let needs_download = not_in_memory && !cached_on_disk;
 
     let done_flag = Arc::new(AtomicBool::new(false));
     let done_bg = done_flag.clone();
@@ -90,7 +101,7 @@ pub async fn embed_notes(
         let mut secs = 0u32;
         while !done_bg.load(Ordering::Relaxed) {
             let title = if needs_download {
-                format!("Downloading EmbeddingGemma 300M… {}s (first run only)", secs)
+                format!("Downloading model… {}s (first run only)", secs)
             } else {
                 format!("Loading model… {}s", secs)
             };
@@ -103,13 +114,6 @@ pub async fn embed_notes(
             secs += 1;
         }
     });
-
-    let model_cache_dir = {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let dir = std::path::PathBuf::from(home).join(".neuron").join("model_cache");
-        std::fs::create_dir_all(&dir).ok();
-        dir
-    };
 
     let embedder_arc = state.local_embedder.clone();
     let vector_size: u64 = spawn_blocking(move || -> Result<u64, String> {
@@ -149,6 +153,17 @@ pub async fn embed_notes(
         spawn_blocking(move || {
             let conn = db.lock().unwrap();
             db::set_setting(&conn, "vector_size", &vs)
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    }
+
+    if force {
+        let db = state.db.clone();
+        spawn_blocking(move || {
+            let conn = db.lock().unwrap();
+            db::clear_embedded_at(&conn)
         })
         .await
         .map_err(|e| e.to_string())?
@@ -272,6 +287,7 @@ pub async fn search_notes(
             file_path: n.file_path,
             tags: serde_json::from_str(&n.tags).unwrap_or_default(),
             embedded_at: n.embedded_at,
+            keywords: serde_json::from_str(&n.keywords).unwrap_or_default(),
         })
         .collect())
 }
